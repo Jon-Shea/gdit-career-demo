@@ -3,14 +3,16 @@ import json
 from datetime import datetime
 from termcolor import cprint
 
+
 #--------------Modify-Me---------------
 group_id = 2
 write_language = "auto"
 read_language = "french"
 #--------------------------------------
 
-account_id = boto3.client('sts').get_caller_identity().get('Account')
 
+#Static resources/variables
+account_id = boto3.client('sts').get_caller_identity().get('Account')
 region = "us-east-2"
 sns_topic_arn = "arn:aws:sns:{}:{}:demo-topic".format(region, account_id)
 sqs_queue_url = "https://sqs.{}.amazonaws.com/{}/demo-queue-{}".format(region, account_id, group_id)
@@ -18,6 +20,7 @@ sns_resource = boto3.resource("sns", region_name=region)
 sqs_resource = boto3.resource("sqs", region_name=region)
 translate_client = boto3.client("translate", region_name=region)
 
+#convert readable language to the AWS language code
 language_mapping = {
     "auto": "auto",
     "english": "en",
@@ -27,11 +30,15 @@ language_mapping = {
     "chinese": "zh",
     "hebrew": "he"
 }
-
 write_language_code = language_mapping[write_language]
 read_language_code = language_mapping[read_language]
 
+
 def write_to_topic(message_json):
+    '''Writes a given message to the SNS topic
+    
+    message_json -- string containing the JSON-representation of the message
+    '''
     topic = sns_resource.Topic(sns_topic_arn)
     
     try:
@@ -43,6 +50,10 @@ def write_to_topic(message_json):
 
 
 def pull_from_queue(timeout=1):
+    '''Attempts to read a message from the SQS queue. Times out after <timeout>
+
+    timeout -- how long to wait for a message to become available
+    '''
     queue = sqs_resource.Queue(sqs_queue_url)
 
     messages = queue.receive_messages(MaxNumberOfMessages=1, WaitTimeSeconds=timeout)
@@ -65,10 +76,14 @@ def pull_from_queue(timeout=1):
 
 
 def write_action():
-    message = input("Please enter the message you would like to send:\n\t")
+    '''Prompts the user for a message to write, and writes it to SNS
+
+    '''
+    message = raw_input("Please enter the message you would like to send:\n\t")
 
     timestamp = str(datetime.now())
 
+    #Create a dictionary describing the message and it's metadata
     message_dict = {
         "message": message,
         "group_id": group_id,
@@ -76,6 +91,7 @@ def write_action():
         "language": write_language_code
     }
 
+    #Dump the dictionary to a JSON representation string
     message_json = json.dumps(message_dict)
 
     error = write_to_topic(message_json)
@@ -86,6 +102,10 @@ def write_action():
 
 
 def print_message(message_dict):
+    '''Prints a given message to the screen
+
+    message_dict -- dictionary describing the message
+    '''
     message = message_dict["message"]
     group_id = message_dict["group_id"]
     timestamp = message_dict["timestamp"]
@@ -94,7 +114,12 @@ def print_message(message_dict):
 
 
 def translate_message(message, source_language, target_language):
-    print("translating {} - {} - {}".format(message, source_language, target_language))
+    '''Translates a given message from the source language to the target language
+
+    message -- text to translate
+    source_language -- language code for the source language
+    target_language -- language code for the target language
+    '''
     response = translate_client.translate_text(Text=message, SourceLanguageCode=source_language, TargetLanguageCode=target_language)
 
     translated_message = response['TranslatedText']
@@ -103,6 +128,9 @@ def translate_message(message, source_language, target_language):
 
 
 def read_action():
+    '''Attempts to read a message from the SQS queue, translate it, and print it to the screen
+
+    '''
     message_json = pull_from_queue()
     if not message_json:
         return False
@@ -123,6 +151,9 @@ def read_action():
 
 
 def read_all_action():
+    '''Attempts to read all available messages from the SQS queue
+
+    '''
     while True:
         messages_left = read_action()
         if not messages_left:
@@ -133,18 +164,20 @@ def read_all_action():
 
 if __name__ == "__main__":
 
+    #mapping between user input and the function to call
     actions = {
         'write': write_action,
-        'read': read_action,
-        'read-all': read_all_action
+        'read': read_all_action
     }
 
     print("Allowed actions are {}".format(list(actions.keys())))
 
     while True:
-        response = input("Which action would you like to take?: ")
+        #Prompt the user for the action to take
+        response = raw_input("Which action would you like to take?: ")
         if response not in actions.keys():
             print("Allowed actions are {}".format(list(actions.keys())))
             continue
 
+        #Execute the requested action
         actions[response]()
