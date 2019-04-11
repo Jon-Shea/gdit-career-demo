@@ -5,8 +5,8 @@ from termcolor import cprint
 
 #--------------Modify-Me---------------
 group_id = 2
-write_language = "english"
-read_language = "spanish"
+write_language = "auto"
+read_language = "french"
 #--------------------------------------
 
 account_id = boto3.client('sts').get_caller_identity().get('Account')
@@ -19,6 +19,7 @@ sqs_resource = boto3.resource("sqs", region_name=region)
 translate_client = boto3.client("translate", region_name=region)
 
 language_mapping = {
+    "auto": "auto",
     "english": "en",
     "french": "fr",
     "german": "de",
@@ -93,6 +94,7 @@ def print_message(message_dict):
 
 
 def translate_message(message, source_language, target_language):
+    print("translating {} - {} - {}".format(message, source_language, target_language))
     response = translate_client.translate_text(Text=message, SourceLanguageCode=source_language, TargetLanguageCode=target_language)
 
     translated_message = response['TranslatedText']
